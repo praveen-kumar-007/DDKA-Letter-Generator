@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
 
+import LetterPdfPreview from "./LetterPdfPreview.jsx";
+
 const letterHeadUrl = "/letter-head.jpg";
 const ddkaLogoUrl =
   "https://res.cloudinary.com/dmmll82la/image/upload/v1766683651/ddka-logo_ywnhyh.png";
@@ -110,8 +112,84 @@ function parseTextWithColors(text) {
   return parts.length > 0 ? parts : [{ text, bold: false, color: null }];
 }
 
+const LETTER_LAYOUT = {
+  refValue: { x: 29.2, y: 23.5 },
+  dateValue: { x: 80.0, y: 22.0 },
+  heading: { x: 25.0, y: 29.5, width: 70 },
+  body: { x: 25.0, y: 37.5, width: 70 },
+};
+
+/**
+ * Single source of truth for letter PDF (download + on-screen preview).
+ */
+function createLetterPdf({
+  refNumber,
+  displayDate,
+  heading,
+  body,
+  headingColor,
+  bodyColor,
+  boldBody,
+}) {
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  pdf.addImage(letterHeadUrl, "JPEG", 0, 0, pageWidth, pageHeight);
+
+  const toX = (percent) => (pageWidth * percent) / 100;
+  const toY = (percent) => (pageHeight * percent) / 100;
+  const toW = (percent) => (pageWidth * percent) / 100;
+  const contentWidth = toW(LETTER_LAYOUT.body.width);
+
+  pdf.setTextColor(31, 41, 55);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(12.5);
+  pdf.text(
+    refNumber || "23/26",
+    toX(LETTER_LAYOUT.refValue.x),
+    toY(LETTER_LAYOUT.refValue.y),
+  );
+  pdf.text(
+    displayDate || "",
+    toX(LETTER_LAYOUT.dateValue.x),
+    toY(LETTER_LAYOUT.dateValue.y),
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(15);
+  const headingColorHex = headingColor.substring(1);
+  const headingR = parseInt(headingColorHex.substring(0, 2), 16);
+  const headingG = parseInt(headingColorHex.substring(2, 4), 16);
+  const headingB = parseInt(headingColorHex.substring(4, 6), 16);
+  pdf.setTextColor(headingR, headingG, headingB);
+  const headingLines = pdf.splitTextToSize(heading, contentWidth);
+  pdf.text(headingLines, toX(LETTER_LAYOUT.heading.x), toY(LETTER_LAYOUT.heading.y));
+
+  pdf.setFontSize(11);
+  const bodyPartsWithColor = parseTextWithColors(body);
+  let currentY = toY(LETTER_LAYOUT.body.y);
+  const lineHeight = 7;
+
+  bodyPartsWithColor.forEach((part) => {
+    pdf.setFont("helvetica", part.bold || boldBody ? "bold" : "normal");
+    const color = part.color || bodyColor;
+    const colorHex = color.substring(1);
+    const r = parseInt(colorHex.substring(0, 2), 16);
+    const g = parseInt(colorHex.substring(2, 4), 16);
+    const b = parseInt(colorHex.substring(4, 6), 16);
+    pdf.setTextColor(r, g, b);
+    const partLines = pdf.splitTextToSize(part.text, contentWidth);
+    partLines.forEach((line) => {
+      pdf.text(line, toX(LETTER_LAYOUT.body.x), currentY);
+      currentY += lineHeight;
+    });
+  });
+
+  return pdf;
+}
+
 export default function App() {
-  const letterRef = useRef(null);
   const bodyTextareaRef = useRef(null);
   const authTimerRef = useRef(null);
   const [loginId, setLoginId] = useState("");
@@ -217,11 +295,61 @@ export default function App() {
     }
   });
   const [isExporting, setIsExporting] = useState(false);
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewPdfBuffer, setPreviewPdfBuffer] = useState(null);
   const [selectedWordColor, setSelectedWordColor] = useState("#FF6B6B");
 
   const displayDate = useMemo(() => formatDisplayDate(dateValue), [dateValue]);
   const isLoginConfigured = Boolean(expectedLoginId && expectedLoginPassword);
+
+  useEffect(() => {
+    if (!isAuthenticated || !showPreview) {
+      setPreviewPdfBuffer(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      try {
+        const pdf = createLetterPdf({
+          refNumber,
+          displayDate,
+          heading,
+          body,
+          headingColor,
+          bodyColor,
+          boldBody,
+        });
+        const buffer = pdf.output("arraybuffer");
+        if (!cancelled) {
+          const copy =
+            typeof buffer.slice === "function"
+              ? buffer.slice(0)
+              : Uint8Array.from(new Uint8Array(buffer)).buffer;
+          setPreviewPdfBuffer(copy);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewPdfBuffer(null);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    isAuthenticated,
+    showPreview,
+    refNumber,
+    displayDate,
+    heading,
+    body,
+    headingColor,
+    bodyColor,
+    boldBody,
+  ]);
 
   const handleLogin = (event) => {
     event.preventDefault();
@@ -428,76 +556,22 @@ export default function App() {
     setBody(newBody);
   };
 
-  const layout = {
-    refValue: { x: 29.2, y: 23.5 },
-    dateValue: { x: 80.0, y: 22.0 },
-    heading: { x: 25.0, y: 29.5, width: 70 },
-    body: { x: 25.0, y: 37.5, width: 70 },
-  };
-
   const handleDownloadPdf = async () => {
-    if (!letterRef.current || isExporting) return;
+    if (isExporting) return;
 
     setIsExporting(true);
     try {
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      pdf.addImage(letterHeadUrl, "JPEG", 0, 0, pageWidth, pageHeight);
-
-      const toX = (percent) => (pageWidth * percent) / 100;
-      const toY = (percent) => (pageHeight * percent) / 100;
-      const toW = (percent) => (pageWidth * percent) / 100;
-      const contentWidth = toW(layout.body.width);
-
-      pdf.setTextColor(31, 41, 55);
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(12.5);
-      pdf.text(
-        refNumber || "23/26",
-        toX(layout.refValue.x),
-        toY(layout.refValue.y),
-      );
-      pdf.text(
-        displayDate || "",
-        toX(layout.dateValue.x),
-        toY(layout.dateValue.y),
-      );
-
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(15);
-      const headingColorHex = headingColor.substring(1);
-      const headingR = parseInt(headingColorHex.substring(0, 2), 16);
-      const headingG = parseInt(headingColorHex.substring(2, 4), 16);
-      const headingB = parseInt(headingColorHex.substring(4, 6), 16);
-      pdf.setTextColor(headingR, headingG, headingB);
-      const headingLines = pdf.splitTextToSize(heading, contentWidth);
-      pdf.text(headingLines, toX(layout.heading.x), toY(layout.heading.y));
-
-      pdf.setFontSize(11);
-      const bodyPartsWithColor = parseTextWithColors(body);
-      let currentY = toY(layout.body.y);
-      const lineHeight = 7;
-
-      bodyPartsWithColor.forEach((part) => {
-        pdf.setFont("helvetica", part.bold ? "bold" : "normal");
-        let color = part.color || bodyColor;
-        const colorHex = color.substring(1);
-        const r = parseInt(colorHex.substring(0, 2), 16);
-        const g = parseInt(colorHex.substring(2, 4), 16);
-        const b = parseInt(colorHex.substring(4, 6), 16);
-        pdf.setTextColor(r, g, b);
-        const partLines = pdf.splitTextToSize(part.text, contentWidth);
-        partLines.forEach((line) => {
-          pdf.text(line, toX(layout.body.x), currentY);
-          currentY += lineHeight;
-        });
+      const pdf = createLetterPdf({
+        refNumber: refNumber || "23/26",
+        displayDate,
+        heading,
+        body,
+        headingColor,
+        bodyColor,
+        boldBody,
       });
-
       pdf.save("letter.pdf");
     } catch (error) {
-      // Silently handle error in production, but ensure UI recovery
       setIsExporting(false);
       throw error;
     } finally {
@@ -507,7 +581,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <main className="workspace">
+      <main
+        className={`workspace${showPreview ? "" : " workspace--editor-only"}`}
+      >
         <section className="editor-panel">
           <div className="panel-branding">
             <img
@@ -661,74 +737,25 @@ export default function App() {
               type="button"
               className="toggle-preview-button"
               onClick={() => setShowPreview(!showPreview)}
-              title={showPreview ? "Hide preview" : "Show preview"}
+              title={
+                showPreview ? "Hide letter preview" : "Show letter preview"
+              }
             >
-              {showPreview ? "Hide" : "Show"}
+              {showPreview ? "Hide preview" : "Show preview"}
             </button>
           </div>
         </section>
 
         {showPreview && (
-          <section className="preview-panel">
-            <div className="paper-frame">
-              <article className="letter-paper" ref={letterRef}>
-                <img
-                  src={letterHeadUrl}
-                  alt="Letter head"
-                  className="letter-head-image"
-                />
-
-                <div className="letter-overlay">
-                  <div
-                    className="overlay-value overlay-ref"
-                    style={{
-                      left: `${layout.refValue.x}%`,
-                      top: `${layout.refValue.y}%`,
-                    }}
-                  >
-                    <strong>{refNumber || "23/26"}</strong>
-                  </div>
-
-                  <div
-                    className="overlay-value overlay-date"
-                    style={{
-                      left: `${layout.dateValue.x}%`,
-                      top: `${layout.dateValue.y}%`,
-                    }}
-                  >
-                    <strong>{displayDate}</strong>
-                  </div>
-
-                  <div
-                    className="overlay-content"
-                    style={{
-                      left: `${layout.heading.x}%`,
-                      top: `${layout.heading.y}%`,
-                      width: `${layout.body.width}%`,
-                    }}
-                  >
-                    <h2 style={{ color: headingColor }}>{heading}</h2>
-                    <p
-                      style={{
-                        fontWeight: boldBody ? "bold" : "normal",
-                        color: bodyColor,
-                      }}
-                    >
-                      {parseTextWithColors(body).map((part, index) => (
-                        <span
-                          key={index}
-                          style={{
-                            fontWeight: part.bold ? "bold" : "inherit",
-                            color: part.color || bodyColor,
-                          }}
-                        >
-                          {part.text}
-                        </span>
-                      ))}
-                    </p>
-                  </div>
-                </div>
-              </article>
+          <section className="preview-panel" aria-label="PDF letter preview">
+            <div className="paper-frame paper-frame--pdf-preview">
+              {previewPdfBuffer ? (
+                <LetterPdfPreview pdfData={previewPdfBuffer} />
+              ) : (
+                <p className="pdf-preview-loading" role="status">
+                  Rendering preview…
+                </p>
+              )}
             </div>
           </section>
         )}
