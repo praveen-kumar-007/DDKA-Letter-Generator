@@ -1,0 +1,19 @@
+{
+    "name": "DDKA Letter Generator",
+    "short_name": "Letter Generator",
+    "description": "Professional letter creation tool for DDKA with PDF export",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#1a237e",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ]
+}
