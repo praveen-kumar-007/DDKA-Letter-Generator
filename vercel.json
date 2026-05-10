@@ -2,12 +2,11 @@
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
     "devCommand": "npm run dev",
-    "env": [
-        {
-            "key": "VITE_APP_TITLE",
-            "value": "DDKA Letter Generator"
+    "build": {
+        "env": {
+            "VITE_APP_TITLE": "DDKA Letter Generator"
         }
-    ],
+    },
     "headers": [
         {
             "source": "/assets/(.*)",
