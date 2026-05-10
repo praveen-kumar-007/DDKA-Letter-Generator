@@ -2,7 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react({ fastRefresh: false })],
+  plugins: [react()],
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
   build: {
     outDir: "dist",
     sourcemap: false,
@@ -23,9 +26,20 @@ export default defineConfig({
     },
   },
   server: {
-    host: "localhost",
+    host: "127.0.0.1",
     port: 5173,
+    strictPort: true,
     open: false,
+    hmr: {
+      protocol: "ws",
+      host: "127.0.0.1",
+      port: 5173,
+      clientPort: 5173,
+    },
+    watch: {
+      usePolling: true,
+      interval: 1000,
+    },
   },
   preview: {
     port: 4173,

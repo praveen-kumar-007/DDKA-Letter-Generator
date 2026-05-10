@@ -7,7 +7,7 @@ const ddkaLogoUrl =
 const storageKey = "letter-generator-state";
 const authStorageKey = "letter-generator-authenticated";
 const authExpiryKey = "letter-generator-auth-expires-at";
-const authDurationMs = 60 * 60 * 1000;
+const authDurationMs = 2 * 60 * 60 * 1000;
 const expectedLoginId = import.meta.env.VITE_LOGIN_ID?.trim() || "";
 const expectedLoginPassword = import.meta.env.VITE_LOGIN_PASSWORD?.trim() || "";
 
@@ -223,35 +223,6 @@ export default function App() {
   const displayDate = useMemo(() => formatDisplayDate(dateValue), [dateValue]);
   const isLoginConfigured = Boolean(expectedLoginId && expectedLoginPassword);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      if (authTimerRef.current) {
-        clearTimeout(authTimerRef.current);
-        authTimerRef.current = null;
-      }
-      return;
-    }
-
-    const storedExpiry = Number(sessionStorage.getItem(authExpiryKey) || 0);
-    const remainingTime = Math.max(storedExpiry - Date.now(), 0);
-
-    if (!storedExpiry || remainingTime <= 0) {
-      handleLogout();
-      return;
-    }
-
-    authTimerRef.current = window.setTimeout(() => {
-      handleLogout();
-    }, remainingTime);
-
-    return () => {
-      if (authTimerRef.current) {
-        clearTimeout(authTimerRef.current);
-        authTimerRef.current = null;
-      }
-    };
-  }, [isAuthenticated]);
-
   const handleLogin = (event) => {
     event.preventDefault();
 
@@ -292,6 +263,50 @@ export default function App() {
     setLoginError("");
   };
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      if (authTimerRef.current) {
+        clearTimeout(authTimerRef.current);
+        authTimerRef.current = null;
+      }
+      return;
+    }
+
+    const storedExpiry = Number(sessionStorage.getItem(authExpiryKey) || 0);
+    const remainingTime = Math.max(storedExpiry - Date.now(), 0);
+
+    if (!storedExpiry || remainingTime <= 0) {
+      handleLogout();
+      return;
+    }
+
+    authTimerRef.current = window.setTimeout(() => {
+      handleLogout();
+    }, remainingTime);
+
+    return () => {
+      if (authTimerRef.current) {
+        clearTimeout(authTimerRef.current);
+        authTimerRef.current = null;
+      }
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        refNumber,
+        dateValue,
+        heading,
+        body,
+        boldBody,
+        headingColor,
+        bodyColor,
+      }),
+    );
+  }, [refNumber, dateValue, heading, body, boldBody, headingColor, bodyColor]);
+
   if (!isAuthenticated) {
     return (
       <div className="app-shell auth-shell">
@@ -319,6 +334,8 @@ export default function App() {
             <label>
               <span>Login ID</span>
               <input
+                id="login-id"
+                name="username"
                 value={loginId}
                 onChange={(event) => setLoginId(event.target.value)}
                 placeholder="Enter your ID"
@@ -329,6 +346,8 @@ export default function App() {
             <label>
               <span>Password</span>
               <input
+                id="login-password"
+                name="password"
                 type="password"
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
@@ -415,21 +434,6 @@ export default function App() {
     heading: { x: 25.0, y: 29.5, width: 70 },
     body: { x: 25.0, y: 37.5, width: 70 },
   };
-
-  useEffect(() => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        refNumber,
-        dateValue,
-        heading,
-        body,
-        boldBody,
-        headingColor,
-        bodyColor,
-      }),
-    );
-  }, [refNumber, dateValue, heading, body, boldBody, headingColor, bodyColor]);
 
   const handleDownloadPdf = async () => {
     if (!letterRef.current || isExporting) return;
@@ -535,6 +539,8 @@ export default function App() {
             <label>
               <span>Reference Number</span>
               <input
+                id="letter-ref-number"
+                name="refNumber"
                 value={refNumber}
                 onChange={(event) => setRefNumber(event.target.value)}
                 placeholder="23/26"
@@ -544,6 +550,8 @@ export default function App() {
             <label>
               <span>Date</span>
               <input
+                id="letter-date"
+                name="letterDate"
                 type="date"
                 value={dateValue}
                 onChange={(event) => setDateValue(event.target.value)}
@@ -554,11 +562,15 @@ export default function App() {
               <span>Heading</span>
               <div className="input-with-color">
                 <input
+                  id="letter-heading"
+                  name="heading"
                   value={heading}
                   onChange={(event) => setHeading(event.target.value)}
                   placeholder="Enter your heading..."
                 />
                 <input
+                  id="letter-heading-color"
+                  name="headingColor"
                   type="color"
                   value={headingColor}
                   onChange={(event) => setHeadingColor(event.target.value)}
@@ -572,6 +584,8 @@ export default function App() {
               <span>Body</span>
               <div className="input-with-color">
                 <textarea
+                  id="letter-body"
+                  name="body"
                   ref={bodyTextareaRef}
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
@@ -579,6 +593,8 @@ export default function App() {
                   placeholder="Enter your body text. Wrap **words** to bold them, or {color:#FF0000}words{/color} to change color..."
                 />
                 <input
+                  id="letter-body-color"
+                  name="bodyColor"
                   type="color"
                   value={bodyColor}
                   onChange={(event) => setBodyColor(event.target.value)}
@@ -598,6 +614,8 @@ export default function App() {
               <div className="color-selected-group">
                 <div className="color-selector-controls">
                   <input
+                    id="letter-selection-color"
+                    name="selectedWordColor"
                     type="color"
                     value={selectedWordColor}
                     onChange={(event) =>
@@ -620,6 +638,8 @@ export default function App() {
 
             <label className="checkbox-label">
               <input
+                id="letter-bold-body-all"
+                name="boldBody"
                 type="checkbox"
                 checked={boldBody}
                 onChange={(event) => setBoldBody(event.target.checked)}
