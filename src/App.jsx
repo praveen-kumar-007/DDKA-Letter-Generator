@@ -167,7 +167,8 @@ async function createLetterPdf({
   container.style.left = "-9999px";
   container.style.top = "-9999px";
   container.style.background = "#fff";
-  container.style.fontFamily = getComputedStyle(document.documentElement).fontFamily || "sans-serif";
+  container.style.fontFamily =
+    getComputedStyle(document.documentElement).fontFamily || "sans-serif";
 
   // Letterhead image
   const img = document.createElement("img");
@@ -312,7 +313,20 @@ async function createLetterPdf({
   return pdf;
 }
 
-function OverlayItem({ sheet, x, y, width = 10, height = 10, anchor = "center", onMove, onDoubleClick, onDragStart, onDragEnd, dragging = false, children }) {
+function OverlayItem({
+  sheet,
+  x,
+  y,
+  width = 10,
+  height = 10,
+  anchor = "center",
+  onMove,
+  onDoubleClick,
+  onDragStart,
+  onDragEnd,
+  dragging = false,
+  children,
+}) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -323,7 +337,7 @@ function OverlayItem({ sheet, x, y, width = 10, height = 10, anchor = "center", 
         el.setPointerCapture?.(ev.pointerId);
       } catch {}
 
-      if (typeof onDragStart === 'function') onDragStart();
+      if (typeof onDragStart === "function") onDragStart();
 
       const pointerId = ev.pointerId;
       const startX = ev.clientX;
@@ -337,8 +351,8 @@ function OverlayItem({ sheet, x, y, width = 10, height = 10, anchor = "center", 
         if (moveEv.pointerId !== pointerId) return;
         const dx = moveEv.clientX - startX;
         const dy = moveEv.clientY - startY;
-        const px = (basePx + dx) / rect.width * 100;
-        const py = (basePy + dy) / rect.height * 100;
+        const px = ((basePx + dx) / rect.width) * 100;
+        const py = ((basePy + dy) / rect.height) * 100;
         onMove(Math.max(0, Math.min(100, px)), Math.max(0, Math.min(100, py)));
       };
 
@@ -349,7 +363,7 @@ function OverlayItem({ sheet, x, y, width = 10, height = 10, anchor = "center", 
         } catch {}
         window.removeEventListener("pointermove", onMoveWindow);
         window.removeEventListener("pointerup", onUp);
-        if (typeof onDragEnd === 'function') onDragEnd();
+        if (typeof onDragEnd === "function") onDragEnd();
       };
 
       window.addEventListener("pointermove", onMoveWindow);
@@ -382,7 +396,10 @@ function OverlayItem({ sheet, x, y, width = 10, height = 10, anchor = "center", 
       role="presentation"
       onDoubleClick={onDoubleClick}
     >
-      <div onDoubleClick={onDoubleClick} style={{ width: "100%", height: "100%" }}>
+      <div
+        onDoubleClick={onDoubleClick}
+        style={{ width: "100%", height: "100%" }}
+      >
         {children}
       </div>
     </div>
@@ -650,7 +667,16 @@ export default function App() {
         positions,
       }),
     );
-  }, [refNumber, dateValue, heading, body, boldBody, headingColor, bodyColor, positions]);
+  }, [
+    refNumber,
+    dateValue,
+    heading,
+    body,
+    boldBody,
+    headingColor,
+    bodyColor,
+    positions,
+  ]);
 
   if (!isAuthenticated) {
     return (
@@ -736,8 +762,6 @@ export default function App() {
     setBody(newBody);
   };
 
-  
-
   const handleColorSelected = () => {
     const textarea = bodyTextareaRef.current;
     if (!textarea) return;
@@ -806,7 +830,9 @@ export default function App() {
     ev.preventDefault();
     if (!sheetEl) return;
     const pointerId = ev.pointerId;
-    try { ev.currentTarget.setPointerCapture?.(pointerId); } catch {}
+    try {
+      ev.currentTarget.setPointerCapture?.(pointerId);
+    } catch {}
 
     const rect = sheetEl.getBoundingClientRect();
     const startX = ev.clientX;
@@ -831,25 +857,34 @@ export default function App() {
       let newH = startHeightPx;
 
       // horizontal
-      if (corner === 'tr' || corner === 'br') {
+      if (corner === "tr" || corner === "br") {
         newW = Math.max(minWidthPx, startWidthPx + dx);
-      } else if (corner === 'tl' || corner === 'bl') {
+      } else if (corner === "tl" || corner === "bl") {
         newW = Math.max(minWidthPx, startWidthPx - dx);
         newLeft = startLeftPx + dx;
       }
 
       // vertical
-      if (corner === 'bl' || corner === 'br') {
+      if (corner === "bl" || corner === "br") {
         newH = Math.max(minHeightPx, startHeightPx + dy);
-      } else if (corner === 'tl' || corner === 'tr') {
+      } else if (corner === "tl" || corner === "tr") {
         newH = Math.max(minHeightPx, startHeightPx - dy);
         newTop = startTopPx + dy;
       }
 
       const newWPercent = Math.max(5, Math.min(100, (newW / rect.width) * 100));
-      const newHPercent = Math.max(3, Math.min(100, (newH / rect.height) * 100));
-      const newXPercent = Math.max(0, Math.min(100, (newLeft / rect.width) * 100));
-      const newYPercent = Math.max(0, Math.min(100, (newTop / rect.height) * 100));
+      const newHPercent = Math.max(
+        3,
+        Math.min(100, (newH / rect.height) * 100),
+      );
+      const newXPercent = Math.max(
+        0,
+        Math.min(100, (newLeft / rect.width) * 100),
+      );
+      const newYPercent = Math.max(
+        0,
+        Math.min(100, (newTop / rect.height) * 100),
+      );
 
       setPositions((p) => ({
         ...p,
@@ -865,13 +900,15 @@ export default function App() {
 
     const onUp = (upEv) => {
       if (upEv.pointerId !== pointerId) return;
-      try { ev.currentTarget.releasePointerCapture?.(pointerId); } catch {}
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
+      try {
+        ev.currentTarget.releasePointerCapture?.(pointerId);
+      } catch {}
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     };
 
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   const handleDragStart = () => {
@@ -894,7 +931,10 @@ export default function App() {
         positions,
       });
       const buffer = pdf.output("arraybuffer");
-      const copy = typeof buffer.slice === "function" ? buffer.slice(0) : Uint8Array.from(new Uint8Array(buffer)).buffer;
+      const copy =
+        typeof buffer.slice === "function"
+          ? buffer.slice(0)
+          : Uint8Array.from(new Uint8Array(buffer)).buffer;
       setPreviewPdfBuffer(copy);
     } catch {
       // ignore — preview effect will try again
@@ -1041,7 +1081,13 @@ export default function App() {
                     max={60}
                     value={positions.refValue.width}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, refValue: { ...p.refValue, width: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        refValue: {
+                          ...p.refValue,
+                          width: Number(e.target.value),
+                        },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1055,7 +1101,13 @@ export default function App() {
                     max={20}
                     value={positions.refValue.height}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, refValue: { ...p.refValue, height: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        refValue: {
+                          ...p.refValue,
+                          height: Number(e.target.value),
+                        },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1069,7 +1121,13 @@ export default function App() {
                     max={60}
                     value={positions.dateValue.width}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, dateValue: { ...p.dateValue, width: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        dateValue: {
+                          ...p.dateValue,
+                          width: Number(e.target.value),
+                        },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1083,7 +1141,13 @@ export default function App() {
                     max={20}
                     value={positions.dateValue.height}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, dateValue: { ...p.dateValue, height: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        dateValue: {
+                          ...p.dateValue,
+                          height: Number(e.target.value),
+                        },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1097,7 +1161,10 @@ export default function App() {
                     max={100}
                     value={positions.body.width}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, body: { ...p.body, width: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        body: { ...p.body, width: Number(e.target.value) },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1111,7 +1178,10 @@ export default function App() {
                     max={90}
                     value={positions.body.height}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, body: { ...p.body, height: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        body: { ...p.body, height: Number(e.target.value) },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1125,7 +1195,13 @@ export default function App() {
                     max={100}
                     value={positions.heading.width}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, heading: { ...p.heading, width: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        heading: {
+                          ...p.heading,
+                          width: Number(e.target.value),
+                        },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1139,7 +1215,13 @@ export default function App() {
                     max={30}
                     value={positions.heading.height}
                     onChange={(e) =>
-                      setPositions((p) => ({ ...p, heading: { ...p.heading, height: Number(e.target.value) } }))
+                      setPositions((p) => ({
+                        ...p,
+                        heading: {
+                          ...p.heading,
+                          height: Number(e.target.value),
+                        },
+                      }))
                     }
                     className="position-control-input"
                   />
@@ -1166,7 +1248,11 @@ export default function App() {
               onChange={(e) => setManualPositioning(e.target.checked)}
             />
             <span>Enable manual positioning</span>
-            <button type="button" onClick={resetPositions} className="toggle-preview-button manual-position-reset">
+            <button
+              type="button"
+              onClick={resetPositions}
+              className="toggle-preview-button manual-position-reset"
+            >
               Reset positions
             </button>
           </label>
@@ -1197,7 +1283,9 @@ export default function App() {
           <section className="preview-panel" aria-label="PDF letter preview">
             <div className="paper-frame paper-frame--pdf-preview">
               {previewPdfBuffer ? (
-                <div className={`pdf-preview-wrapper ${isDragging ? 'dragging' : ''}`}>
+                <div
+                  className={`pdf-preview-wrapper ${isDragging ? "dragging" : ""}`}
+                >
                   <img
                     src={letterHeadUrl}
                     alt="Letterhead background"
@@ -1221,25 +1309,54 @@ export default function App() {
                           anchor="left"
                           dragging={isDragging}
                           onMove={(nx, ny) =>
-                            setPositions((p) => ({ ...p, refValue: { ...p.refValue, x: nx, y: ny } }))
+                            setPositions((p) => ({
+                              ...p,
+                              refValue: { ...p.refValue, x: nx, y: ny },
+                            }))
                           }
                           onDragStart={handleDragStart}
                           onDragEnd={handleDragEnd}
                           onDoubleClick={() => {
-                            const el = document.getElementById('letter-ref-number');
+                            const el =
+                              document.getElementById("letter-ref-number");
                             if (el) el.focus();
                           }}
                         >
-                          <div className="overlay-box" title={refNumber || "Ref"}>
+                          <div
+                            className="overlay-box"
+                            title={refNumber || "Ref"}
+                          >
                             <div
                               className="overlay-box-content"
-                              style={{ color: '#1f2937', fontSize: '12px' }}
-                              dangerouslySetInnerHTML={{ __html: escapeHtml(refNumber || '') }}
+                              style={{ color: "#1f2937", fontSize: "12px" }}
+                              dangerouslySetInnerHTML={{
+                                __html: escapeHtml(refNumber || ""),
+                              }}
                             />
-                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('refValue','tl',e)} />
-                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('refValue','tr',e)} />
-                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('refValue','bl',e)} />
-                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('refValue','br',e)} />
+                            <div
+                              className="resize-handle tl"
+                              onPointerDown={(e) =>
+                                handleStartResize("refValue", "tl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle tr"
+                              onPointerDown={(e) =>
+                                handleStartResize("refValue", "tr", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle bl"
+                              onPointerDown={(e) =>
+                                handleStartResize("refValue", "bl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle br"
+                              onPointerDown={(e) =>
+                                handleStartResize("refValue", "br", e)
+                              }
+                            />
                           </div>
                         </OverlayItem>
 
@@ -1252,25 +1369,53 @@ export default function App() {
                           anchor="left"
                           dragging={isDragging}
                           onMove={(nx, ny) =>
-                            setPositions((p) => ({ ...p, dateValue: { ...p.dateValue, x: nx, y: ny } }))
+                            setPositions((p) => ({
+                              ...p,
+                              dateValue: { ...p.dateValue, x: nx, y: ny },
+                            }))
                           }
                           onDragStart={handleDragStart}
                           onDragEnd={handleDragEnd}
                           onDoubleClick={() => {
-                            const el = document.getElementById('letter-date');
+                            const el = document.getElementById("letter-date");
                             if (el) el.focus();
                           }}
                         >
-                          <div className="overlay-box" title={displayDate || 'Date'}>
+                          <div
+                            className="overlay-box"
+                            title={displayDate || "Date"}
+                          >
                             <div
                               className="overlay-box-content"
-                              style={{ color: '#1f2937', fontSize: '12px' }}
-                              dangerouslySetInnerHTML={{ __html: escapeHtml(displayDate || '') }}
+                              style={{ color: "#1f2937", fontSize: "12px" }}
+                              dangerouslySetInnerHTML={{
+                                __html: escapeHtml(displayDate || ""),
+                              }}
                             />
-                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('dateValue','tl',e)} />
-                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('dateValue','tr',e)} />
-                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('dateValue','bl',e)} />
-                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('dateValue','br',e)} />
+                            <div
+                              className="resize-handle tl"
+                              onPointerDown={(e) =>
+                                handleStartResize("dateValue", "tl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle tr"
+                              onPointerDown={(e) =>
+                                handleStartResize("dateValue", "tr", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle bl"
+                              onPointerDown={(e) =>
+                                handleStartResize("dateValue", "bl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle br"
+                              onPointerDown={(e) =>
+                                handleStartResize("dateValue", "br", e)
+                              }
+                            />
                           </div>
                         </OverlayItem>
 
@@ -1283,25 +1428,61 @@ export default function App() {
                           anchor="left"
                           dragging={isDragging}
                           onMove={(nx, ny) =>
-                            setPositions((p) => ({ ...p, heading: { ...p.heading, x: nx, y: ny } }))
+                            setPositions((p) => ({
+                              ...p,
+                              heading: { ...p.heading, x: nx, y: ny },
+                            }))
                           }
                           onDragStart={handleDragStart}
                           onDragEnd={handleDragEnd}
                           onDoubleClick={() => {
-                            const el = document.getElementById('letter-heading');
+                            const el =
+                              document.getElementById("letter-heading");
                             if (el) el.focus();
                           }}
                         >
-                          <div className="overlay-box" title={heading || "Heading"}>
+                          <div
+                            className="overlay-box"
+                            title={heading || "Heading"}
+                          >
                             <div
                               className="overlay-box-content"
-                              style={{ color: headingColor || '#000', fontSize: '20px', fontWeight: 700 }}
-                              dangerouslySetInnerHTML={{ __html: escapeHtml(heading || '').replace(/\n/g, '<br>') }}
+                              style={{
+                                color: headingColor || "#000",
+                                fontSize: "20px",
+                                fontWeight: 700,
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: escapeHtml(heading || "").replace(
+                                  /\n/g,
+                                  "<br>",
+                                ),
+                              }}
                             />
-                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('heading','tl',e)} />
-                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('heading','tr',e)} />
-                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('heading','bl',e)} />
-                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('heading','br',e)} />
+                            <div
+                              className="resize-handle tl"
+                              onPointerDown={(e) =>
+                                handleStartResize("heading", "tl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle tr"
+                              onPointerDown={(e) =>
+                                handleStartResize("heading", "tr", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle bl"
+                              onPointerDown={(e) =>
+                                handleStartResize("heading", "bl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle br"
+                              onPointerDown={(e) =>
+                                handleStartResize("heading", "br", e)
+                              }
+                            />
                           </div>
                         </OverlayItem>
 
@@ -1314,25 +1495,53 @@ export default function App() {
                           anchor="left"
                           dragging={isDragging}
                           onMove={(nx, ny) =>
-                            setPositions((p) => ({ ...p, body: { ...p.body, x: nx, y: ny } }))
+                            setPositions((p) => ({
+                              ...p,
+                              body: { ...p.body, x: nx, y: ny },
+                            }))
                           }
                           onDragStart={handleDragStart}
                           onDragEnd={handleDragEnd}
                           onDoubleClick={() => {
-                            const el = document.getElementById('letter-body');
+                            const el = document.getElementById("letter-body");
                             if (el) el.focus();
                           }}
                         >
                           <div className="overlay-box" title={body || "Body"}>
                             <div
                               className="overlay-box-content"
-                              style={{ color: bodyColor || '#000', fontSize: '14px' }}
-                              dangerouslySetInnerHTML={{ __html: bodyToHtml(body) }}
+                              style={{
+                                color: bodyColor || "#000",
+                                fontSize: "14px",
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: bodyToHtml(body),
+                              }}
                             />
-                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('body','tl',e)} />
-                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('body','tr',e)} />
-                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('body','bl',e)} />
-                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('body','br',e)} />
+                            <div
+                              className="resize-handle tl"
+                              onPointerDown={(e) =>
+                                handleStartResize("body", "tl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle tr"
+                              onPointerDown={(e) =>
+                                handleStartResize("body", "tr", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle bl"
+                              onPointerDown={(e) =>
+                                handleStartResize("body", "bl", e)
+                              }
+                            />
+                            <div
+                              className="resize-handle br"
+                              onPointerDown={(e) =>
+                                handleStartResize("body", "br", e)
+                              }
+                            />
                           </div>
                         </OverlayItem>
                       </>
