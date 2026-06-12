@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 import LetterPdfPreview from "./LetterPdfPreview.jsx";
 
@@ -50,6 +51,27 @@ function parseBodyForBold(text) {
   }
 
   return parts.length > 0 ? parts : [{ text, bold: false, color: null }];
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function bodyToHtml(text) {
+  const parts = parseTextWithColors(text || "");
+  return parts
+    .map((part) => {
+      let t = escapeHtml(part.text).replace(/\n/g, "<br>");
+      if (part.bold) t = `<strong>${t}</strong>`;
+      if (part.color) t = `<span style=\"color:${part.color}\">${t}</span>`;
+      return t;
+    })
+    .join("");
 }
 
 function parseTextWithColors(text) {
@@ -113,16 +135,16 @@ function parseTextWithColors(text) {
 }
 
 const LETTER_LAYOUT = {
-  refValue: { x: 29.2, y: 23.5 },
-  dateValue: { x: 80.0, y: 22.0 },
-  heading: { x: 25.0, y: 29.5, width: 70 },
-  body: { x: 25.0, y: 37.5, width: 70 },
+  refValue: { x: 29.2, y: 23.5, width: 20, height: 6 },
+  dateValue: { x: 80.0, y: 22.0, width: 20, height: 6 },
+  heading: { x: 25.0, y: 29.5, width: 70, height: 8 },
+  body: { x: 25.0, y: 37.5, width: 70, height: 40 },
 };
 
 /**
  * Single source of truth for letter PDF (download + on-screen preview).
  */
-function createLetterPdf({
+async function createLetterPdf({
   refNumber,
   displayDate,
   heading,
@@ -130,63 +152,241 @@ function createLetterPdf({
   headingColor,
   bodyColor,
   boldBody,
+  positions = LETTER_LAYOUT,
 }) {
+  // Use html2canvas to render an HTML representation so browser fonts (Hindi) work.
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 
-  pdf.addImage(letterHeadUrl, "JPEG", 0, 0, pageWidth, pageHeight);
+  // Offscreen container sized to A4 in mm so css mm units map nicely.
+  const container = document.createElement("div");
+  container.style.width = `${pageWidth}mm`;
+  container.style.height = `${pageHeight}mm`;
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "-9999px";
+  container.style.background = "#fff";
+  container.style.fontFamily = getComputedStyle(document.documentElement).fontFamily || "sans-serif";
 
-  const toX = (percent) => (pageWidth * percent) / 100;
-  const toY = (percent) => (pageHeight * percent) / 100;
-  const toW = (percent) => (pageWidth * percent) / 100;
-  const contentWidth = toW(LETTER_LAYOUT.body.width);
+  // Letterhead image
+  const img = document.createElement("img");
+  img.src = letterHeadUrl;
+  img.style.width = "100%";
+  img.style.height = "100%";
+  img.style.objectFit = "cover";
+  img.style.position = "absolute";
+  img.style.left = "0";
+  img.style.top = "0";
+  container.appendChild(img);
+  // Wait for letterhead image to load (reduce html2canvas failures)
+  try {
+    if (typeof img.decode === "function") {
+      await img.decode();
+    } else {
+      await new Promise((res) => {
+        if (img.complete && img.naturalWidth) return res();
+        img.onload = () => res();
+        img.onerror = () => res();
+      });
+    }
+  } catch {
+    // ignore — proceed anyway
+  }
 
-  pdf.setTextColor(31, 41, 55);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(12.5);
-  pdf.text(
-    refNumber || "23/26",
-    toX(LETTER_LAYOUT.refValue.x),
-    toY(LETTER_LAYOUT.refValue.y),
+  const makeText = (text, opts = {}) => {
+    const el = document.createElement("div");
+    el.style.position = "absolute";
+    el.style.left = `${opts.x}%`;
+    el.style.top = `${opts.y}%`;
+    if (opts.width) el.style.width = `${opts.width}%`;
+    if (opts.height) el.style.height = `${opts.height}%`;
+    // anchor: center (default) or left
+    if (opts.anchor === "left") {
+      el.style.transform = "translate(0, -50%)";
+    } else {
+      el.style.transform = "translate(-50%, -50%)";
+    }
+    el.style.color = opts.color || "#1f2937";
+    el.style.whiteSpace = opts.pre ? "pre-wrap" : "normal";
+    el.style.wordBreak = "break-word";
+    el.style.boxSizing = "border-box";
+    if (opts.height) el.style.overflow = "hidden";
+    el.style.textAlign = opts.align || "left";
+    if (opts.bold) el.style.fontWeight = "700";
+    if (opts.fontSize) el.style.fontSize = opts.fontSize;
+    el.innerHTML = opts.html || escapeHtml(text || "");
+    return el;
+  };
+
+  // Reference number
+  container.appendChild(
+    makeText(refNumber || "23/26", {
+      x: positions.refValue.x,
+      y: positions.refValue.y,
+      width: positions.refValue.width,
+      height: positions.refValue.height,
+      anchor: "left",
+      color: "#1f2937",
+      fontSize: "12px",
+    }),
   );
-  pdf.text(
-    displayDate || "",
-    toX(LETTER_LAYOUT.dateValue.x),
-    toY(LETTER_LAYOUT.dateValue.y),
+
+  // Date
+  container.appendChild(
+    makeText(displayDate || "", {
+      x: positions.dateValue.x,
+      y: positions.dateValue.y,
+      width: positions.dateValue.width,
+      height: positions.dateValue.height,
+      anchor: "left",
+      color: "#1f2937",
+      fontSize: "12px",
+    }),
   );
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(15);
-  const headingColorHex = headingColor.substring(1);
-  const headingR = parseInt(headingColorHex.substring(0, 2), 16);
-  const headingG = parseInt(headingColorHex.substring(2, 4), 16);
-  const headingB = parseInt(headingColorHex.substring(4, 6), 16);
-  pdf.setTextColor(headingR, headingG, headingB);
-  const headingLines = pdf.splitTextToSize(heading, contentWidth);
-  pdf.text(headingLines, toX(LETTER_LAYOUT.heading.x), toY(LETTER_LAYOUT.heading.y));
+  // Heading
+  container.appendChild(
+    makeText(heading || "", {
+      x: positions.heading.x,
+      y: positions.heading.y,
+      width: positions.heading.width,
+      height: positions.heading.height,
+      anchor: "left",
+      color: headingColor || "#000",
+      bold: true,
+      fontSize: "20px",
+      html: escapeHtml(heading || "").replace(/\n/g, "<br>"),
+    }),
+  );
 
-  pdf.setFontSize(11);
-  const bodyPartsWithColor = parseTextWithColors(body);
-  let currentY = toY(LETTER_LAYOUT.body.y);
-  const lineHeight = 7;
+  // Body
+  container.appendChild(
+    makeText(body || "", {
+      x: positions.body.x,
+      y: positions.body.y,
+      width: positions.body.width,
+      height: positions.body.height,
+      anchor: "left",
+      color: bodyColor || "#000",
+      fontSize: "14px",
+      pre: true,
+      html: bodyToHtml(body),
+    }),
+  );
 
-  bodyPartsWithColor.forEach((part) => {
-    pdf.setFont("helvetica", part.bold || boldBody ? "bold" : "normal");
-    const color = part.color || bodyColor;
-    const colorHex = color.substring(1);
-    const r = parseInt(colorHex.substring(0, 2), 16);
-    const g = parseInt(colorHex.substring(2, 4), 16);
-    const b = parseInt(colorHex.substring(4, 6), 16);
-    pdf.setTextColor(r, g, b);
-    const partLines = pdf.splitTextToSize(part.text, contentWidth);
-    partLines.forEach((line) => {
-      pdf.text(line, toX(LETTER_LAYOUT.body.x), currentY);
-      currentY += lineHeight;
+  document.body.appendChild(container);
+
+  try {
+    const scale = 2; // improve quality
+    // compute pixel dimensions of the container
+    const containerWidth = Math.max(1, container.offsetWidth);
+    const containerHeight = Math.max(1, container.offsetHeight);
+
+    const canvas = await html2canvas(container, {
+      scale,
+      useCORS: true,
+      backgroundColor: null,
+      // prevent html2canvas from trying to restore scroll on cloned doc
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: Math.ceil(containerWidth),
+      windowHeight: Math.ceil(containerHeight),
+      onclone: (clonedDoc) => {
+        try {
+          // ensure cloned document is at origin and has no smooth scroll
+          clonedDoc.documentElement.style.scrollBehavior = "auto";
+          clonedDoc.defaultView?.scrollTo(0, 0);
+          clonedDoc.body?.scrollTo(0, 0);
+        } catch (e) {
+          // swallow errors - this just avoids noisy warnings
+        }
+      },
     });
-  });
+    const imgData = canvas.toDataURL("image/png", 1);
+    pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
+  } finally {
+    document.body.removeChild(container);
+  }
 
   return pdf;
+}
+
+function OverlayItem({ sheet, x, y, width = 10, height = 10, anchor = "center", onMove, onDoubleClick, onDragStart, onDragEnd, dragging = false, children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !sheet) return;
+    const handlePointerDown = (ev) => {
+      ev.preventDefault();
+      try {
+        el.setPointerCapture?.(ev.pointerId);
+      } catch {}
+
+      if (typeof onDragStart === 'function') onDragStart();
+
+      const pointerId = ev.pointerId;
+      const startX = ev.clientX;
+      const startY = ev.clientY;
+
+      const rect = sheet.getBoundingClientRect();
+      const basePx = (x / 100) * rect.width;
+      const basePy = (y / 100) * rect.height;
+
+      const onMoveWindow = (moveEv) => {
+        if (moveEv.pointerId !== pointerId) return;
+        const dx = moveEv.clientX - startX;
+        const dy = moveEv.clientY - startY;
+        const px = (basePx + dx) / rect.width * 100;
+        const py = (basePy + dy) / rect.height * 100;
+        onMove(Math.max(0, Math.min(100, px)), Math.max(0, Math.min(100, py)));
+      };
+
+      const onUp = (upEv) => {
+        if (upEv.pointerId !== pointerId) return;
+        try {
+          el.releasePointerCapture?.(pointerId);
+        } catch {}
+        window.removeEventListener("pointermove", onMoveWindow);
+        window.removeEventListener("pointerup", onUp);
+        if (typeof onDragEnd === 'function') onDragEnd();
+      };
+
+      window.addEventListener("pointermove", onMoveWindow);
+      window.addEventListener("pointerup", onUp);
+    };
+
+    el.addEventListener("pointerdown", handlePointerDown);
+    return () => el.removeEventListener("pointerdown", handlePointerDown);
+  }, [sheet, x, y, width, height, anchor, onMove, onDragStart, onDragEnd]);
+
+  const style = {
+    left: `${x}%`,
+    top: `${y}%`,
+    width: width ? `${width}%` : undefined,
+    height: height ? `${height}%` : undefined,
+  };
+
+  // anchor left should translate X by 0, otherwise center
+  if (anchor === "left") {
+    style.transform = "translate(0, -50%)";
+  } else {
+    style.transform = "translate(-50%, -50%)";
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={`overlay-item${dragging ? " overlay-item--dragging" : ""}`}
+      style={style}
+      role="presentation"
+      onDoubleClick={onDoubleClick}
+    >
+      <div onDoubleClick={onDoubleClick} style={{ width: "100%", height: "100%" }}>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -298,6 +498,20 @@ export default function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewPdfBuffer, setPreviewPdfBuffer] = useState(null);
   const [selectedWordColor, setSelectedWordColor] = useState("#FF6B6B");
+  const [positions, setPositions] = useState(() => {
+    const savedState = localStorage.getItem(storageKey);
+    if (!savedState) return LETTER_LAYOUT;
+    try {
+      const parsed = JSON.parse(savedState);
+      return parsed.positions || LETTER_LAYOUT;
+    } catch {
+      return LETTER_LAYOUT;
+    }
+  });
+  const [sheetEl, setSheetEl] = useState(null);
+  const [manualPositioning, setManualPositioning] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const resizeStateRef = useRef(null);
 
   const displayDate = useMemo(() => formatDisplayDate(dateValue), [dateValue]);
   const isLoginConfigured = Boolean(expectedLoginId && expectedLoginPassword);
@@ -310,29 +524,30 @@ export default function App() {
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      try {
-        const pdf = createLetterPdf({
-          refNumber,
-          displayDate,
-          heading,
-          body,
-          headingColor,
-          bodyColor,
-          boldBody,
-        });
-        const buffer = pdf.output("arraybuffer");
-        if (!cancelled) {
-          const copy =
-            typeof buffer.slice === "function"
-              ? buffer.slice(0)
-              : Uint8Array.from(new Uint8Array(buffer)).buffer;
-          setPreviewPdfBuffer(copy);
+      (async () => {
+        try {
+          const pdf = await createLetterPdf({
+            refNumber,
+            displayDate,
+            heading,
+            body,
+            headingColor,
+            bodyColor,
+            boldBody,
+            positions,
+          });
+          const buffer = pdf.output("arraybuffer");
+          if (!cancelled) {
+            const copy =
+              typeof buffer.slice === "function"
+                ? buffer.slice(0)
+                : Uint8Array.from(new Uint8Array(buffer)).buffer;
+            setPreviewPdfBuffer(copy);
+          }
+        } catch {
+          if (!cancelled) setPreviewPdfBuffer(null);
         }
-      } catch {
-        if (!cancelled) {
-          setPreviewPdfBuffer(null);
-        }
-      }
+      })();
     }, 300);
 
     return () => {
@@ -349,6 +564,7 @@ export default function App() {
     headingColor,
     bodyColor,
     boldBody,
+    positions,
   ]);
 
   const handleLogin = (event) => {
@@ -431,9 +647,10 @@ export default function App() {
         boldBody,
         headingColor,
         bodyColor,
+        positions,
       }),
     );
-  }, [refNumber, dateValue, heading, body, boldBody, headingColor, bodyColor]);
+  }, [refNumber, dateValue, heading, body, boldBody, headingColor, bodyColor, positions]);
 
   if (!isAuthenticated) {
     return (
@@ -519,6 +736,8 @@ export default function App() {
     setBody(newBody);
   };
 
+  
+
   const handleColorSelected = () => {
     const textarea = bodyTextareaRef.current;
     if (!textarea) return;
@@ -561,7 +780,7 @@ export default function App() {
 
     setIsExporting(true);
     try {
-      const pdf = createLetterPdf({
+      const pdf = await createLetterPdf({
         refNumber: refNumber || "23/26",
         displayDate,
         heading,
@@ -569,6 +788,7 @@ export default function App() {
         headingColor,
         bodyColor,
         boldBody,
+        positions,
       });
       pdf.save("letter.pdf");
     } catch (error) {
@@ -576,6 +796,108 @@ export default function App() {
       throw error;
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const resetPositions = () => setPositions(LETTER_LAYOUT);
+
+  // Resize logic for overlay boxes (heading/body)
+  const handleStartResize = (areaKey, corner, ev) => {
+    ev.preventDefault();
+    if (!sheetEl) return;
+    const pointerId = ev.pointerId;
+    try { ev.currentTarget.setPointerCapture?.(pointerId); } catch {}
+
+    const rect = sheetEl.getBoundingClientRect();
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+    const start = positions[areaKey];
+    const startWidthPx = (start.width / 100) * rect.width;
+    const startHeightPx = (start.height / 100) * rect.height;
+    const startLeftPx = (start.x / 100) * rect.width;
+    const startTopPx = (start.y / 100) * rect.height;
+
+    const minWidthPx = Math.max(40, rect.width * 0.1);
+    const minHeightPx = Math.max(24, rect.height * 0.03);
+
+    const onMove = (moveEv) => {
+      if (moveEv.pointerId !== pointerId) return;
+      const dx = moveEv.clientX - startX;
+      const dy = moveEv.clientY - startY;
+
+      let newLeft = startLeftPx;
+      let newTop = startTopPx;
+      let newW = startWidthPx;
+      let newH = startHeightPx;
+
+      // horizontal
+      if (corner === 'tr' || corner === 'br') {
+        newW = Math.max(minWidthPx, startWidthPx + dx);
+      } else if (corner === 'tl' || corner === 'bl') {
+        newW = Math.max(minWidthPx, startWidthPx - dx);
+        newLeft = startLeftPx + dx;
+      }
+
+      // vertical
+      if (corner === 'bl' || corner === 'br') {
+        newH = Math.max(minHeightPx, startHeightPx + dy);
+      } else if (corner === 'tl' || corner === 'tr') {
+        newH = Math.max(minHeightPx, startHeightPx - dy);
+        newTop = startTopPx + dy;
+      }
+
+      const newWPercent = Math.max(5, Math.min(100, (newW / rect.width) * 100));
+      const newHPercent = Math.max(3, Math.min(100, (newH / rect.height) * 100));
+      const newXPercent = Math.max(0, Math.min(100, (newLeft / rect.width) * 100));
+      const newYPercent = Math.max(0, Math.min(100, (newTop / rect.height) * 100));
+
+      setPositions((p) => ({
+        ...p,
+        [areaKey]: {
+          ...p[areaKey],
+          width: Math.round(newWPercent * 100) / 100,
+          height: Math.round(newHPercent * 100) / 100,
+          x: Math.round(newXPercent * 100) / 100,
+          y: Math.round(newYPercent * 100) / 100,
+        },
+      }));
+    };
+
+    const onUp = (upEv) => {
+      if (upEv.pointerId !== pointerId) return;
+      try { ev.currentTarget.releasePointerCapture?.(pointerId); } catch {}
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const handleDragStart = () => {
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = async () => {
+    setIsDragging(false);
+    // regenerate preview immediately after drag ends
+    if (!isAuthenticated || !showPreview) return;
+    try {
+      const pdf = await createLetterPdf({
+        refNumber,
+        displayDate,
+        heading,
+        body,
+        headingColor,
+        bodyColor,
+        boldBody,
+        positions,
+      });
+      const buffer = pdf.output("arraybuffer");
+      const copy = typeof buffer.slice === "function" ? buffer.slice(0) : Uint8Array.from(new Uint8Array(buffer)).buffer;
+      setPreviewPdfBuffer(copy);
+    } catch {
+      // ignore — preview effect will try again
     }
   };
 
@@ -710,6 +1032,119 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              <div className="position-controls-grid">
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Ref width %</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={60}
+                    value={positions.refValue.width}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, refValue: { ...p.refValue, width: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Ref height %</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={20}
+                    value={positions.refValue.height}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, refValue: { ...p.refValue, height: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Date width %</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={60}
+                    value={positions.dateValue.width}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, dateValue: { ...p.dateValue, width: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Date height %</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={20}
+                    value={positions.dateValue.height}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, dateValue: { ...p.dateValue, height: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Body width %</span>
+                  <input
+                    type="number"
+                    min={10}
+                    max={100}
+                    value={positions.body.width}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, body: { ...p.body, width: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Body height %</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={90}
+                    value={positions.body.height}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, body: { ...p.body, height: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Heading width %</span>
+                  <input
+                    type="number"
+                    min={10}
+                    max={100}
+                    value={positions.heading.width}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, heading: { ...p.heading, width: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+
+                <label className="position-control-item">
+                  <span style={{ fontWeight: 700 }}>Heading height %</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={30}
+                    value={positions.heading.height}
+                    onChange={(e) =>
+                      setPositions((p) => ({ ...p, heading: { ...p.heading, height: Number(e.target.value) } }))
+                    }
+                    className="position-control-input"
+                  />
+                </label>
+              </div>
             </label>
 
             <label className="checkbox-label">
@@ -723,6 +1158,18 @@ export default function App() {
               <span>Bold the body text</span>
             </label>
           </div>
+
+          <label className="manual-position-toggle">
+            <input
+              type="checkbox"
+              checked={manualPositioning}
+              onChange={(e) => setManualPositioning(e.target.checked)}
+            />
+            <span>Enable manual positioning</span>
+            <button type="button" onClick={resetPositions} className="toggle-preview-button manual-position-reset">
+              Reset positions
+            </button>
+          </label>
 
           <div className="button-group">
             <button
@@ -750,7 +1197,148 @@ export default function App() {
           <section className="preview-panel" aria-label="PDF letter preview">
             <div className="paper-frame paper-frame--pdf-preview">
               {previewPdfBuffer ? (
-                <LetterPdfPreview pdfData={previewPdfBuffer} />
+                <div className={`pdf-preview-wrapper ${isDragging ? 'dragging' : ''}`}>
+                  <img
+                    src={letterHeadUrl}
+                    alt="Letterhead background"
+                    className="pdf-preview-letterhead"
+                    aria-hidden="true"
+                  />
+                  <LetterPdfPreview
+                    pdfData={previewPdfBuffer}
+                    onSheetRef={(el) => setSheetEl(el)}
+                  />
+
+                  <div className="pdf-overlay" aria-hidden={!manualPositioning}>
+                    {manualPositioning && sheetEl ? (
+                      <>
+                        <OverlayItem
+                          sheet={sheetEl}
+                          x={positions.refValue.x}
+                          y={positions.refValue.y}
+                          width={positions.refValue.width}
+                          height={positions.refValue.height}
+                          anchor="left"
+                          dragging={isDragging}
+                          onMove={(nx, ny) =>
+                            setPositions((p) => ({ ...p, refValue: { ...p.refValue, x: nx, y: ny } }))
+                          }
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDoubleClick={() => {
+                            const el = document.getElementById('letter-ref-number');
+                            if (el) el.focus();
+                          }}
+                        >
+                          <div className="overlay-box" title={refNumber || "Ref"}>
+                            <div
+                              className="overlay-box-content"
+                              style={{ color: '#1f2937', fontSize: '12px' }}
+                              dangerouslySetInnerHTML={{ __html: escapeHtml(refNumber || '') }}
+                            />
+                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('refValue','tl',e)} />
+                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('refValue','tr',e)} />
+                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('refValue','bl',e)} />
+                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('refValue','br',e)} />
+                          </div>
+                        </OverlayItem>
+
+                        <OverlayItem
+                          sheet={sheetEl}
+                          x={positions.dateValue.x}
+                          y={positions.dateValue.y}
+                          width={positions.dateValue.width}
+                          height={positions.dateValue.height}
+                          anchor="left"
+                          dragging={isDragging}
+                          onMove={(nx, ny) =>
+                            setPositions((p) => ({ ...p, dateValue: { ...p.dateValue, x: nx, y: ny } }))
+                          }
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDoubleClick={() => {
+                            const el = document.getElementById('letter-date');
+                            if (el) el.focus();
+                          }}
+                        >
+                          <div className="overlay-box" title={displayDate || 'Date'}>
+                            <div
+                              className="overlay-box-content"
+                              style={{ color: '#1f2937', fontSize: '12px' }}
+                              dangerouslySetInnerHTML={{ __html: escapeHtml(displayDate || '') }}
+                            />
+                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('dateValue','tl',e)} />
+                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('dateValue','tr',e)} />
+                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('dateValue','bl',e)} />
+                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('dateValue','br',e)} />
+                          </div>
+                        </OverlayItem>
+
+                        <OverlayItem
+                          sheet={sheetEl}
+                          x={positions.heading.x}
+                          y={positions.heading.y}
+                          width={positions.heading.width}
+                          height={positions.heading.height}
+                          anchor="left"
+                          dragging={isDragging}
+                          onMove={(nx, ny) =>
+                            setPositions((p) => ({ ...p, heading: { ...p.heading, x: nx, y: ny } }))
+                          }
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDoubleClick={() => {
+                            const el = document.getElementById('letter-heading');
+                            if (el) el.focus();
+                          }}
+                        >
+                          <div className="overlay-box" title={heading || "Heading"}>
+                            <div
+                              className="overlay-box-content"
+                              style={{ color: headingColor || '#000', fontSize: '20px', fontWeight: 700 }}
+                              dangerouslySetInnerHTML={{ __html: escapeHtml(heading || '').replace(/\n/g, '<br>') }}
+                            />
+                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('heading','tl',e)} />
+                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('heading','tr',e)} />
+                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('heading','bl',e)} />
+                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('heading','br',e)} />
+                          </div>
+                        </OverlayItem>
+
+                        <OverlayItem
+                          sheet={sheetEl}
+                          x={positions.body.x}
+                          y={positions.body.y}
+                          width={positions.body.width}
+                          height={positions.body.height}
+                          anchor="left"
+                          dragging={isDragging}
+                          onMove={(nx, ny) =>
+                            setPositions((p) => ({ ...p, body: { ...p.body, x: nx, y: ny } }))
+                          }
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDoubleClick={() => {
+                            const el = document.getElementById('letter-body');
+                            if (el) el.focus();
+                          }}
+                        >
+                          <div className="overlay-box" title={body || "Body"}>
+                            <div
+                              className="overlay-box-content"
+                              style={{ color: bodyColor || '#000', fontSize: '14px' }}
+                              dangerouslySetInnerHTML={{ __html: bodyToHtml(body) }}
+                            />
+                            <div className="resize-handle tl" onPointerDown={(e) => handleStartResize('body','tl',e)} />
+                            <div className="resize-handle tr" onPointerDown={(e) => handleStartResize('body','tr',e)} />
+                            <div className="resize-handle bl" onPointerDown={(e) => handleStartResize('body','bl',e)} />
+                            <div className="resize-handle br" onPointerDown={(e) => handleStartResize('body','br',e)} />
+                          </div>
+                        </OverlayItem>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               ) : (
                 <p className="pdf-preview-loading" role="status">
                   Rendering preview…

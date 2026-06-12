@@ -12,7 +12,7 @@ function debounce(fn, ms) {
   };
 }
 
-export default function LetterPdfPreview({ pdfData }) {
+export default function LetterPdfPreview({ pdfData, onSheetRef }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
@@ -20,6 +20,10 @@ export default function LetterPdfPreview({ pdfData }) {
   const [broken, setBroken] = useState(false);
 
   useEffect(() => {
+    if (typeof onSheetRef === "function") {
+      onSheetRef(wrapRef.current);
+    }
+
     if (!(pdfData instanceof ArrayBuffer) || pdfData.byteLength === 0) {
       pdfDocRef.current = null;
       setBroken(false);

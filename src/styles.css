@@ -1,8 +1,6 @@
 :root {
   color-scheme: light;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-    "Cantarell", sans-serif;
+  font-family: "Noto Sans Devanagari", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
   background:
     radial-gradient(
       circle at top left,
@@ -616,6 +614,127 @@ textarea {
   vertical-align: top;
 }
 
+.pdf-preview-letterhead {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.pdf-preview-wrapper.dragging .pdf-page-preview-canvas {
+  opacity: 0.96;
+}
+
+/* Overlay and draggable controls for manual positioning */
+.pdf-preview-wrapper {
+  position: relative;
+}
+
+.pdf-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.pdf-overlay { z-index: 25; }
+
+.overlay-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: move;
+  background: transparent;
+}
+
+.overlay-item--dragging {
+  cursor: grabbing;
+}
+
+.overlay-item--dragging .overlay-box {
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+  border-color: rgba(26, 35, 126, 0.32);
+  opacity: 0.98;
+}
+
+.overlay-handle {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #ffffff; /* cover canvas text */
+  border: 1px dashed rgba(26, 35, 126, 0.12);
+  color: #1a237e;
+  font-weight: 700;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+  z-index: 35;
+}
+
+.overlay-body {
+  max-width: 70%;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.overlay-box {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed rgba(26, 35, 126, 0.18);
+  border-radius: 10px;
+  background: #ffffff; /* opaque white to cover PDF text underneath while editing */
+  box-sizing: border-box;
+  padding: 8px 12px;
+  overflow: hidden;
+  z-index: 30;
+}
+
+.overlay-box .overlay-box-label {
+  font-weight: 700;
+  color: rgba(26,35,126,0.9);
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.overlay-box-content {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  font-size: inherit;
+  color: inherit;
+  line-height: 1.35;
+  -webkit-user-select: none;
+  user-select: none; /* prevent selecting underlying canvas text */
+}
+
+.resize-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border: 2px solid rgba(26,35,126,0.9);
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(15,23,42,0.08);
+  z-index: 40;
+}
+
+.resize-handle.tl { left: -8px; top: -8px; cursor: nwse-resize; }
+.resize-handle.tr { right: -8px; top: -8px; cursor: nesw-resize; }
+.resize-handle.bl { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.resize-handle.br { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+.overlay-item[role="presentation"] { touch-action: none; }
+
+.position-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .pdf-page-preview-error {
   margin: 14px 0 0;
   padding: 12px 14px;
@@ -678,6 +797,44 @@ textarea {
   color: #1f2937;
 }
 
+.position-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+  align-items: start;
+}
+
+.position-control-item {
+  display: grid;
+  gap: 6px;
+}
+
+.position-control-item span {
+  font-weight: 700;
+}
+
+.position-control-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.manual-position-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.manual-position-toggle span {
+  font-weight: 500;
+}
+
+.manual-position-reset {
+  margin-left: auto;
+}
+
 .meta-label {
   display: block;
   font-size: 0.76rem;
@@ -696,6 +853,14 @@ textarea {
   .workspace.workspace--editor-only {
     max-width: 100%;
   }
+
+  .preview-panel {
+    justify-content: stretch;
+  }
+
+  .paper-frame {
+    width: 100%;
+  }
 }
 
 @media (min-width: 1400px) {
@@ -707,16 +872,16 @@ textarea {
 
 @media (max-width: 640px) {
   .app-shell {
-    padding: 16px;
+    padding: 12px;
   }
 
   .auth-shell {
-    padding: 16px;
+    padding: 12px;
   }
 
   .auth-card {
-    padding: 24px;
-    border-radius: 24px;
+    padding: 20px;
+    border-radius: 22px;
   }
 
   .auth-logo {
@@ -725,16 +890,45 @@ textarea {
 
   .workspace {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 14px;
   }
 
   .editor-panel,
   .paper-frame {
-    border-radius: 22px;
+    border-radius: 20px;
   }
 
   .editor-panel {
-    padding: 20px;
+    padding: 18px;
+  }
+
+  .field-grid {
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .input-with-color,
+  .color-selector-controls,
+  .button-group,
+  .manual-position-toggle {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .button-group {
+    gap: 10px;
+  }
+
+  .export-button,
+  .toggle-preview-button,
+  .manual-position-reset,
+  .color-button,
+  .bold-button {
+    width: 100%;
+  }
+
+  .manual-position-reset {
+    margin-left: 0;
   }
 
   .panel-ddka-logo {
@@ -754,22 +948,9 @@ textarea {
     height: 44px !important;
   }
 
-  .color-selector-controls {
-    flex-direction: column;
-  }
-
   .word-color-picker {
     width: 100%;
     height: 44px;
-  }
-
-  .color-button {
-    width: 100%;
-  }
-
-  .button-group {
-    flex-direction: row;
-    margin-top: 16px;
   }
 
   .export-button {
@@ -786,4 +967,63 @@ textarea {
     margin-top: 16px;
   }
 
+  .pdf-preview-wrapper {
+    overflow-x: auto;
+  }
+
+  .pdf-page-preview-sheet {
+    min-width: 280px;
+  }
+
+  .pdf-page-preview-canvas {
+    width: 100%;
+    height: auto;
+  }
+
+  .position-controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .position-control-item {
+    min-width: 0;
+  }
+
+  .position-control-input {
+    min-height: 44px;
+  }
+
+}
+
+@media (max-width: 420px) {
+  .app-shell,
+  .auth-shell {
+    padding: 10px;
+  }
+
+  .auth-card,
+  .editor-panel,
+  .paper-frame {
+    border-radius: 18px;
+  }
+
+  .panel-copy h1,
+  .auth-card h1 {
+    font-size: clamp(1.6rem, 8vw, 2.2rem);
+  }
+
+  .toggle-preview-button,
+  .export-button,
+  .bold-button,
+  .color-button {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .pdf-page-preview-sheet {
+    min-width: 240px;
+  }
+
+  .preview-panel {
+    margin-top: 12px;
+  }
 }
